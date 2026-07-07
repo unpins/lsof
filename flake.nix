@@ -15,8 +15,29 @@
     unpins-lib.lib.mkStandaloneFlake {
       inherit self;
       name = "lsof";
+
+      # Build via the unpin-llvm engine + emit a bitcode multicall module.
+      engine = "unpin-llvm";
+      multicall = {
+        programs = [{ name = "lsof"; }];
+      };
       build = pkgs:
         pkgs.pkgsStatic.lsof.overrideAttrs (old: {
+          # nixpkgs sets `env.LSOF_INCLUDE = "${lib.getDev stdenv.cc.libc}/include"`
+          # to point lsof's Configure at the system headers. The unpin-llvm engine
+          # cc-wrapper is built with `libc = null` (it carries its libc headers in
+          # the toolchain sysroot), so `stdenv.cc.libc` is null and the default
+          # interpolation coerces null → eval error on BOTH platforms. Point it at
+          # the target libc's dev headers explicitly: musl on Linux, the macOS SDK
+          # (the same sysroot the engine feeds clang via SDKROOT) on Darwin. The
+          # value only seeds a `s,/usr/include,$LSOF_INCLUDE,` rewrite, and the
+          # engine resolves the real headers via its sysroot regardless.
+          env = old.env // {
+            LSOF_INCLUDE =
+              if pkgs.stdenv.hostPlatform.isLinux
+              then "${pkgs.lib.getDev pkgs.pkgsStatic.musl}/include"
+              else "${pkgs.apple-sdk.sdkroot}/usr/include";
+          };
           # lsof bakes its build CFLAGS into version.h so `lsof -v` can echo
           # them. That string includes the musl `-I<libc-dev>/include` path.
           # nixpkgs already runs `nuke-refs version.h`, which blanks the hash
