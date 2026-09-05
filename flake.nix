@@ -24,7 +24,30 @@
         programs = [{ name = "lsof"; }];
       };
       build = pkgs:
-        pkgs.pkgsStatic.lsof.overrideAttrs (old: {
+        let
+          p = pkgs.pkgsStatic;
+          isLinux = pkgs.stdenv.hostPlatform.isLinux;
+          # lsof's Configure probes optional features by testing
+          # `-r $LSOF_INCLUDE/<header>` -- one prefix for everything. On a
+          # distribution that is /usr/include and every header is there; here
+          # each library has its own store prefix, so selinux/selinux.h was
+          # never found and Configure dropped SELinux support in silence. The
+          # man page we embed documents `-Z`, and the binary answered
+          # `illegal option character: Z`.
+          #
+          # RPC (the other header probe, tirpc/rpc/rpc.h) is NOT reachable
+          # here and this is a libc limit, not a packaging one: lsof calls
+          # `getrpcbynumber`, which lives in glibc's NSS, not in libtirpc --
+          # Debian's lsof imports it from libc. musl has no RPC database, so
+          # the Linux build cannot name RPC programs. The macOS build can and
+          # does; its SDK carries both.
+          lsofIncludes = pkgs.symlinkJoin {
+            name = "lsof-include";
+            paths = map (x: "${pkgs.lib.getDev x}/include")
+              [ p.musl p.libselinux ];
+          };
+        in
+        p.lsof.overrideAttrs (old: {
           # nixpkgs sets `env.LSOF_INCLUDE = "${lib.getDev stdenv.cc.libc}/include"`
           # to point lsof's Configure at the system headers. The unpin-llvm engine
           # cc-wrapper is built with `libc = null` (it carries its libc headers in
@@ -36,10 +59,12 @@
           # engine resolves the real headers via its sysroot regardless.
           env = old.env // {
             LSOF_INCLUDE =
-              if pkgs.stdenv.hostPlatform.isLinux
-              then "${pkgs.lib.getDev pkgs.pkgsStatic.musl}/include"
+              if isLinux
+              then "${lsofIncludes}"
               else "${pkgs.apple-sdk.sdkroot}/usr/include";
           };
+          buildInputs = (old.buildInputs or [ ])
+            ++ pkgs.lib.optionals isLinux [ p.libselinux ];
           # lsof bakes its build CFLAGS into version.h so `lsof -v` can echo
           # them. That string includes the musl `-I<libc-dev>/include` path.
           # nixpkgs already runs `nuke-refs version.h`, which blanks the hash
