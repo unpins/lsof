@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [4.99.6-1] - 2026-09-26
+
 ### Fixed
 
 - The `-Z` option, which lists the SELinux security context of each process,
