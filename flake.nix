@@ -77,15 +77,6 @@
           preBuild = (old.preBuild or "") + ''
             sed -i 's#-I/nix/store/[^ "]*##g' version.h
           '';
-          # ncurses is a buildInput (macOS links -lncurses for its curses-based
-          # output; Linux doesn't link it but still gets it on the include
-          # path). Its `-dev` output leaks into
-          # $out/nix-support/propagated-build-inputs as a reference. A leaf
-          # binary propagates nothing — drop the metadata so the closure is
-          # empty.
-          postFixup = (old.postFixup or "") + ''
-            rm -rf "$out/nix-support"
-          '';
         });
     };
 }
