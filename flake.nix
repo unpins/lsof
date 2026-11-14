@@ -8,9 +8,7 @@
 
   inputs.unpins-lib.url = "github:unpins/nix-lib";
 
-  # lsof lists open files by reading the kernel's view of every process —
-  # /proc on Linux, libproc on macOS. There is no Windows equivalent (no
-  # /proc, no global fd table to walk), so this is a Linux + macOS package.
+  # Linux and macOS: lsof has no Windows port upstream.
   outputs = { self, unpins-lib }:
     unpins-lib.lib.mkStandaloneFlake {
       inherit self;
@@ -35,12 +33,11 @@
           # man page we embed documents `-Z`, and the binary answered
           # `illegal option character: Z`.
           #
-          # RPC (the other header probe, tirpc/rpc/rpc.h) is NOT reachable
-          # here and this is a libc limit, not a packaging one: lsof calls
-          # `getrpcbynumber`, which lives in glibc's NSS, not in libtirpc --
-          # Debian's lsof imports it from libc. musl has no RPC database, so
-          # the Linux build cannot name RPC programs. The macOS build can and
-          # does; its SDK carries both.
+          # RPC (the other header probe, rpc/rpc.h or tirpc/rpc/rpc.h) stays
+          # off on Linux, as in nixpkgs: its lsof has no libtirpc, and glibc no
+          # longer ships rpc/rpc.h. The way in would be libtirpc built with
+          # --enable-rpcdb (for `getrpcbynumber`); not tried. The macOS SDK
+          # carries both.
           lsofIncludes = pkgs.symlinkJoin {
             name = "lsof-include";
             paths = map (x: "${pkgs.lib.getDev x}/include")
@@ -53,10 +50,10 @@
           # cc-wrapper is built with `libc = null` (it carries its libc headers in
           # the toolchain sysroot), so `stdenv.cc.libc` is null and the default
           # interpolation coerces null → eval error on BOTH platforms. Point it at
-          # the target libc's dev headers explicitly: musl on Linux, the macOS SDK
-          # (the same sysroot the engine feeds clang via SDKROOT) on Darwin. The
-          # value only seeds a `s,/usr/include,$LSOF_INCLUDE,` rewrite, and the
-          # engine resolves the real headers via its sysroot regardless.
+          # the target's headers explicitly: the `lsof-include` join above on
+          # Linux, the macOS SDK (the same sysroot the engine feeds clang via
+          # SDKROOT) on Darwin. Configure's `-r $LSOF_INCLUDE/<header>` probes
+          # read it, and it becomes `-I$LSOF_INCLUDE` (LSOF_DINC) in the compile.
           env = old.env // {
             LSOF_INCLUDE =
               if isLinux
@@ -66,7 +63,7 @@
           buildInputs = (old.buildInputs or [ ])
             ++ pkgs.lib.optionals isLinux [ p.libselinux ];
           # lsof bakes its build CFLAGS into version.h so `lsof -v` can echo
-          # them. That string includes the musl `-I<libc-dev>/include` path.
+          # them. That string includes the `-I<lsof-include>` path.
           # nixpkgs already runs `nuke-refs version.h`, which blanks the hash
           # to a dead `eeee…` placeholder (so it's not a real store reference)
           # — but the literal `/nix/store/…` text remains, which trips our

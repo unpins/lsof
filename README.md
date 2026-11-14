@@ -49,15 +49,7 @@ The [Releases](https://github.com/unpins/lsof/releases) page has standalone bina
 
 ## Build notes
 
-- **Platforms:** Linux and macOS. lsof walks the kernel's per-process open-file
-  tables — `/proc` on Linux, `libproc` on macOS. Windows has no equivalent
-  (no `/proc`, no global file-descriptor table to enumerate), so there is no
-  mingw/cosmopolitan build.
+- **Platforms:** Linux and macOS. lsof has no Windows port upstream.
 - **RPC program names:** on macOS, `lsof -i` names the RPC programs registered
-  with the portmapper. On Linux it shows the numbers instead — that lookup
-  lives in glibc, and this binary is built against musl so that it runs on any
-  distribution.
-- **0-ref:** lsof embeds its build `CFLAGS` into the binary so `lsof -v` can
-  echo them; that string carried the musl `-I<libc>/include` path. nixpkgs
-  already blanks the store hash, and we strip the whole `-I/nix/store/…` token
-  so the binary holds no store reference at all.
+  with the portmapper. On Linux it shows the numbers instead, as nixpkgs' lsof
+  does: the names would come from libtirpc, which neither links on Linux.
