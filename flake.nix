@@ -41,7 +41,7 @@
           lsofIncludes = pkgs.symlinkJoin {
             name = "lsof-include";
             paths = map (x: "${pkgs.lib.getDev x}/include")
-              [ p.musl p.libselinux ];
+              [ p.unpinMuslHeaders p.libselinux ];
           };
         in
         p.lsof.overrideAttrs (old: {
